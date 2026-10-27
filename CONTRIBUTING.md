@@ -29,10 +29,13 @@ Jeder Pull Request wird automatisch gebaut (GitHub Actions). Er sollte ohne Fehl
 
 ## Neue Version veröffentlichen (für Maintainer)
 
+Auf GitHub unter **Releases → Draft a new release** einen neuen Tag anlegen (z.B. `v1.1.0`),
+Ziel `main`, und auf *Publish release* klicken. Alternativ per Kommandozeile:
+
 ```bash
 git tag v1.1.0
 git push origin v1.1.0
 ```
 
-GitHub Actions baut dann die Firmware, legt ein Release mit den `.bin`-Dateien an und
-aktualisiert die Installationsseite auf GitHub Pages.
+GitHub Actions baut dann die Firmware, hängt die `.bin`-Dateien an das Release und
+aktualisiert die Installationsseite auf GitHub Pages. Tags mit oder ohne `v` funktionieren.
