@@ -1,0 +1,129 @@
+name: Build
+
+# Baut die Firmware bei jedem Push und Pull Request.
+# Bei einem Tag "v*" (z.B. v1.1.0) zusätzlich: GitHub-Release mit den .bin-Dateien
+# und Aktualisierung der Installationsseite auf GitHub Pages.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Werkzeuge installieren
+        run: pip install platformio esptool==4.8.1
+
+      - name: Version bestimmen
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="dev-${GITHUB_SHA::7}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          sed -i "s/\"1.0.0-dev\"/\"$VERSION\"/" src/config.h
+          grep -n "define FW_VERSION" src/config.h
+
+      - name: Firmware bauen
+        run: pio run -e cyd
+
+      - name: Binärdateien zusammenstellen
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          B=.pio/build/cyd
+          mkdir -p dist
+          python -m esptool --chip esp32 merge_bin -o "dist/grad-no-komplett-$V.bin" \
+            --flash_mode dio --flash_freq 40m --flash_size 4MB \
+            0x1000 $B/bootloader.bin \
+            0x8000 $B/partitions.bin \
+            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 $B/firmware.bin
+          cp $B/firmware.bin "dist/firmware-$V-ota.bin"
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ steps.ver.outputs.version }}
+          path: dist/*.bin
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ needs.build.outputs.version }}
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.bin
+          generate_release_notes: true
+          body: |
+            **Neu installieren:** `grad-no-komplett-${{ needs.build.outputs.version }}.bin` auf Adresse 0x0 flashen, oder einfach über die Installationsseite im Browser.
+            **Update eines bestehenden Geräts:** `firmware-${{ needs.build.outputs.version }}-ota.bin` in der Weboberfläche unter System → Firmware-Update hochladen.
+
+  pages:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ needs.build.outputs.version }}
+          path: dist
+      - name: Seite zusammenstellen
+        run: |
+          V="${{ needs.build.outputs.version }}"
+          mkdir -p _site
+          cp web/* _site/
+          cp "dist/grad-no-komplett-$V.bin" _site/firmware.bin
+          cat > _site/manifest.json <<EOF
+          {
+            "name": "Grad no!",
+            "version": "$V",
+            "new_install_prompt_erase": true,
+            "builds": [
+              { "chipFamily": "ESP32", "parts": [ { "path": "firmware.bin", "offset": 0 } ] }
+            ]
+          }
+          EOF
+          sed -i "s/__VERSION__/$V/g; s#__REPO__#${{ github.repository }}#g" _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

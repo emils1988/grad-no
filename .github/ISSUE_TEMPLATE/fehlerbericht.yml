@@ -1,0 +1,34 @@
+name: Fehlerbericht
+description: Etwas funktioniert nicht wie erwartet
+labels: [bug]
+body:
+  - type: textarea
+    id: beschreibung
+    attributes:
+      label: Was ist passiert?
+      description: Was hast du erwartet, und was ist stattdessen passiert?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Firmware-Version
+      placeholder: z.B. 1.0.0 (Weboberfläche → System)
+    validations:
+      required: true
+  - type: input
+    id: display
+    attributes:
+      label: Display-Variante
+      placeholder: z.B. ESP32-2432S028R, eine Micro-USB-Buchse
+  - type: input
+    id: haltestelle
+    attributes:
+      label: Betroffene Haltestelle
+      placeholder: z.B. Villach Hbf
+  - type: textarea
+    id: rohdaten
+    attributes:
+      label: Debug-Rohdaten
+      description: "Bei Problemen mit Abfahrten den Inhalt von System → Debug: Rohdaten einfügen"
+      render: text
