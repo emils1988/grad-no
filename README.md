@@ -7,7 +7,14 @@ Eine kleine Abfahrtstafel für Bahn und Bus in Österreich: ein **ESP32 mit 2,8"
 mit Echtzeit-Verspätungen und Ausfällen. Kein Server, kein Home Assistant, keine App nötig:
 anstecken, WLAN einrichten, Haltestelle im Browser suchen, fertig.
 
-<!-- Foto vom fertigen Gerät hier einfügen: ![Grad no!](docs/foto.jpg) -->
+<p align="center">
+  <img src="docs/foto.jpg" alt="Grad no! zeigt die Abfahrten von Villach Hbf mit Verspätungen" width="640">
+</p>
+
+<p align="center">
+  <img src="docs/demo.gif" alt="Umschalten zwischen Haltestellen per Tippen" width="440"><br>
+  <sub>Umschalten zwischen den Haltestellen per Tippen · <a href="docs/demo.mp4">Video in voller Qualität</a></sub>
+</p>
 
 > **Hinweis:** Privates Bastelprojekt, **nicht von den ÖBB** und nicht mit ihnen verbunden.
 > Es nutzt die öffentlich erreichbaren, aber nicht offiziell dokumentierten Scotty-Schnittstellen.
