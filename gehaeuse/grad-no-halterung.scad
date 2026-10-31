@@ -34,7 +34,7 @@ bild_unten = 3.4;    // untere Platinenkante -> unterer Rand des Bildbereichs
 bild_b     = 57.6;   // Breite des Bildbereichs (2,8": 57,6)
 bild_h     = 43.2;   // Höhe des Bildbereichs  (2,8": 43,2)
 usb_hoehe  = 20.0;   // untere Platinenkante -> Mitte USB-Buchse (USB rechts)
-hinten_frei = 12.2;  // Platz hinter der Platine (Bauteile + gewinkelter Stecker)
+hinten_frei = 11.9;  // Platz hinter der Platine (Bauteile + gewinkelter Stecker); 11,9 -> Schild genau so tief wie der Mast
 
 /* [Gehäuse] */
 wand       = 2.4;    // Wandstärke
@@ -99,7 +99,9 @@ kfenster_z0 = max(zapfen_l + 4, usb_z - kfenster_h/2);
 
 // Mast liegt links am Schild, mittig in der Tiefe
 mast_x0 = -mast;
-mast_y0 = (box_t - mast)/2;
+// Rückseite von Mastkopf und Schild bündig, damit das Rückteil plan auf dem Druckbett liegt
+// (auch wenn Mast und Schild durch geänderte Maße unterschiedlich tief werden)
+mast_y0 = box_t - mast;
 kanal_cx = mast_x0 + mast/2;
 kanal_cy = mast_y0 + mast/2;
 zapfen_x = kanal_x + 4;
