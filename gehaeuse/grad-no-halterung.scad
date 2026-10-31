@@ -4,7 +4,9 @@
 //
 //  Teile (Variable "teil" setzen oder per Kommandozeile: -D 'teil="rahmen"'):
 //    "zusammenbau"  – Vorschau des ganzen Halters (nicht drucken)
-//    "rahmen"       – Front-Rahmen mit Displayfenster     (Front nach unten drucken)
+//    "rahmen"       – Front-Rahmen mit Displayfenster, "H" vertieft (Front nach unten drucken)
+//    "rahmen_ohne_h"  – Front-Rahmen ohne "H"
+//    "rahmen_2farbig" + "h_einlage" – Rahmen und "H"-Einlage für den 2-Farben-Druck (zusammen laden)
 //    "rueckteil"    – Rückschale mit Mastkopf             (Rückseite nach unten)
 //    "mast"         – Mast (Rohr mit Kabelkanal)          (liegend drucken)
 //    "verbinder"    – 2 Steckverbinder Mast <-> Kopf/Sockel (stehend drucken)
@@ -44,7 +46,8 @@ lcd_luft   = 0.5;    // Abstand Frontplatte <-> Display (damit der Touch nicht d
 fenster_zu = 0.8;    // Fenster ist so viel größer als der Bildbereich (je Seite)
 usb_platz  = 18.0;   // Platz links neben der Platine für den gewinkelten USB-Stecker
 r_ecke     = 3.0;    // Eckenradius
-h_symbol   = true;   // Haltestellen-"H" neben dem Display
+h_modus    = 1;      // Haltestellen-"H" neben dem Display: 0 = ohne, 1 = vertieft (einfarbig), 2 = für 2-Farben-Druck
+h_tiefe    = 0.8;    // Tiefe des "H" (bei 2 Farben = Dicke der Einlage, 4 Schichten à 0,2 mm)
 
 /* [Mast & Sockel] */
 mast       = 22;     // Mast-Querschnitt (quadratisch)
@@ -80,6 +83,7 @@ pcb_hinten = pcb_vorne + pcb_d;
 box_t    = pcb_hinten + hinten_frei + front; // Gesamttiefe
 trenn_y  = pcb_hinten + 1.2;                 // Trennung Rahmen / Rückteil
 falz     = 2.0;                              // Überlappung Rahmen -> Rückteil
+falz_b   = wand / 2;                         // Breite des Falzes (innere Wandhälfte)
 
 // Bildbereich nach 180°-Drehung (USB links), in Gehäusekoordinaten
 fx0 = pcb_x0 + (pcb_b - bild_links - bild_b) - fenster_zu;
@@ -126,7 +130,7 @@ module zapfen_form(l, extra=0) {
 }
 
 // ------------------------------------------------------------ Rahmen (vorne)
-module rahmen() {
+module rahmen(hm = h_modus) {
   difference() {
     union() {
       // Frontplatte + Seitenwände bis zur Trennlinie
@@ -134,10 +138,11 @@ module rahmen() {
         rbox_xz(box_b, box_h, trenn_y, r_ecke);
         translate([wand, front, wand]) cube([innen_b, trenn_y, innen_h]);
       }
-      // Falz: innen umlaufend, steckt ins Rückteil
-      translate([0, trenn_y - e, 0]) difference() {
-        translate([wand+e, 0, wand+e]) rbox_xz(innen_b-2*e, innen_h-2*e, falz, 1);
-        translate([wand+1.2, -e, wand+1.2]) cube([innen_b-2.4, falz+2*e, innen_h-2.4]);
+      // Falz: innere Hälfte der Wand ragt umlaufend ins Rückteil.
+      // Er steht direkt auf der Wand (1,2 mm breit, 1 mm in die Wand hinein verschmolzen) und hält dadurch sicher.
+      translate([0, trenn_y - 1, 0]) difference() {
+        translate([wand - falz_b, 0, wand - falz_b]) rbox_xz(innen_b + 2*falz_b, innen_h + 2*falz_b, falz + 1, 1);
+        translate([wand, -e, wand]) cube([innen_b, falz + 1 + 2*e, innen_h]);
       }
       // Schraubdome für die Platine
       for (p = loecher) translate([p[0], front - e, p[1]])
@@ -154,15 +159,22 @@ module rahmen() {
       rotate([-90,0,0]) cylinder(d=2.6, h=20);
     // Kabelfenster (hinterer Teil der linken Wand)
     kabelfenster();
-    // Haltestellen-"H" auf der freien Fläche neben dem Display (0,6 mm vertieft)
-    if (h_symbol) translate([(wand + fx0)/2, -e, box_h/2]) rotate([-90,0,0])
-      linear_extrude(0.6 + e) {
-        difference() { circle(d=min(fx0 - 8, box_h - 14)); circle(d=min(fx0 - 8, box_h - 14) - 3); }
-        text("H", size=min(fx0 - 8, box_h - 14)*0.45, halign="center", valign="center",
-             font="Liberation Sans:style=Bold");
-      }
+    // Haltestellen-"H" auf der freien Fläche neben dem Display (vertieft bzw. Platz für die Einlage)
+    if (hm > 0) translate([0, -e, 0]) h_form(h_tiefe + e);
   }
 }
+
+// "H" im Kreis (wie das Haltestellenschild), in Rahmen-Koordinaten, von der Front aus t tief
+h_d = min(fx0 - 8, box_h - 14);
+module h_form(t) {
+  translate([(wand + fx0)/2, 0, box_h/2]) rotate([-90,0,0])
+    linear_extrude(t) {
+      difference() { circle(d=h_d, $fn=96); circle(d=h_d - 3.6, $fn=96); }
+      text("H", size=h_d*0.46, halign="center", valign="center", font="Liberation Sans:style=Bold");
+    }
+}
+// Einlage für den 2-Farben-Druck: füllt die Vertiefung genau aus
+module h_einlage() { h_form(h_tiefe); }
 
 // ------------------------------------------------------------ Rückteil + Mastkopf
 module kabelfenster() {
@@ -196,9 +208,9 @@ module rueckteil() {
     }
     // Innenraum
     translate([wand, trenn_y - e, wand]) cube([innen_b, box_t - trenn_y - front + e, innen_h]);
-    // Falz-Aufnahme
-    translate([wand - 0.15, trenn_y - e, wand - 0.15])
-      cube([innen_b + 0.3, falz + 0.3, innen_h + 0.3]);
+    // Falz-Aufnahme (innere Wandhälfte ausgespart, 0,15 mm Spiel)
+    translate([wand - falz_b - 0.15, trenn_y - e, wand - falz_b - 0.15])
+      cube([innen_b + 2*falz_b + 0.3, falz + 0.3, innen_h + 2*falz_b + 0.3]);
     kabelfenster();
     // Schraublöcher M3 (durchgehend, mit Senkung für den Kopf)
     for (p = loecher) translate([p[0], 0, p[1]]) rotate([-90,0,0]) {
@@ -342,7 +354,10 @@ module zusammenbau() {
 
 // ------------------------------------------------------------ Druckausrichtung
 if (teil == "zusammenbau") zusammenbau();
-else if (teil == "rahmen")    rotate([90,0,0]) translate([0,0,0]) rahmen();          // Front auf dem Druckbett
+else if (teil == "rahmen")    rotate([90,0,0]) rahmen();                       // Front auf dem Druckbett
+else if (teil == "rahmen_ohne_h") rotate([90,0,0]) rahmen(0);
+else if (teil == "rahmen_2farbig") rotate([90,0,0]) rahmen(2);
+else if (teil == "h_einlage") rotate([90,0,0]) h_einlage();                // gleiche Lage wie der Rahmen
 else if (teil == "rueckteil") rotate([-90,0,0]) translate([0,-box_t,0]) rueckteil(); // Rückseite auf dem Druckbett
 else if (teil == "mast")      rotate([0,-90,0]) translate([-mast_x0, -mast_y0, -mast_l]) mast_mitte(); // liegend
 else if (teil == "verbinder") for (i=[0,1]) translate([i*25, 0, 0]) translate([-kanal_cx, -kanal_cy, 0]) verbinder();

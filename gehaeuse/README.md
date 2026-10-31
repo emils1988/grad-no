@@ -18,7 +18,9 @@ Das USB-Kabel läuft unsichtbar durch den hohlen Mast in den Sockel, die Buchse 
 | Datei | Anzahl | Ausrichtung beim Druck | Hinweis |
 |---|---|---|---|
 | `stl/passtest.stl` | 1 | flach | zuerst drucken, Board auflegen: Fenster und Löcher müssen passen |
-| `stl/rahmen.stl` | 1 | Front nach unten | mit „H“-Haltestellensymbol |
+| `stl/rahmen.stl` | 1 | Front nach unten | „H“-Haltestellensymbol vertieft (einfarbig) |
+| `stl/rahmen_ohne_h.stl` | (1) | Front nach unten | statt `rahmen.stl`: glatte Front ohne „H“ |
+| `rahmen-2farbig.3mf` | (1) | Front nach unten | statt `rahmen.stl`: Rahmen + „H“-Einlage als zwei Teile für den 2-Farben-Druck |
 | `stl/rueckteil.stl` | 1 | Rückseite nach unten | Rückschale mit Mastkopf in einem Stück |
 | `stl/mast.stl` | 1 | liegend | 150 mm, mit Kabelkanal |
 | `stl/verbinder.stl` | 2 | stehend | Steckverbinder Mast ↔ Kopf und Mast ↔ Sockel |
@@ -26,7 +28,12 @@ Das USB-Kabel läuft unsichtbar durch den hohlen Mast in den Sockel, die Buchse 
 | `stl/boden.stl` | 1 | flach | Bodenplatte |
 
 Kein Stützmaterial nötig. Empfehlung: PLA oder PETG, 0,2 mm Schichthöhe, 3 Wände, 15–20 % Infill.
-Der Rahmen sieht mit einem anderen Farbton für das „H“ (Farbwechsel nach 0,6 mm) besonders gut aus.
+
+**2-Farben-Druck des „H“:** `rahmen-2farbig.3mf` im Slicer öffnen. Bambu Studio, OrcaSlicer und PrusaSlicer fragen,
+ob die Teile als *ein Objekt mit mehreren Teilen* geladen werden sollen, hier **Ja** wählen. Dann dem Teil „H-Einlage“
+die zweite Farbe zuweisen. Die Einlage ist 0,8 mm dick (4 Schichten) und liegt auf dem Druckbett, das „H“ ist also
+die Sichtseite. Einzeln gibt es die Teile auch als `stl/rahmen_2farbig.stl` und `stl/h_einlage.stl` (gleiche Koordinaten).
+Ohne Mehrfarbdrucker: `rahmen.stl` drucken und bei 0,8 mm (vor der 5. Schicht) das Filament wechseln. Die Front hat dann Farbe 1, und im vertieften „H“ sieht man Farbe 2.
 
 ## Zubehör
 
@@ -66,7 +73,7 @@ Alle Maße sind in `grad-no-halterung.scad` oben als Variablen zusammengefasst u
 | `lcd_d` | Höhe des Displays über der Platine | 4,0 |
 | `hinten_frei` | Platz hinter der Platine | 12,2 |
 | `mast_l` | Länge des Mastes | 150 |
-| `h_symbol` | „H“-Symbol auf dem Rahmen | true |
+| `h_modus` | „H“-Symbol: 0 = ohne, 1 = vertieft, 2 = für 2-Farben-Druck | 1 |
 
 Einzelnes Teil exportieren:
 
@@ -74,4 +81,4 @@ Einzelnes Teil exportieren:
 openscad -o stl/rahmen.stl -D 'teil="rahmen"' grad-no-halterung.scad
 ```
 
-Teile: `rahmen`, `rueckteil`, `mast`, `verbinder`, `sockel`, `boden`, `passtest`, Vorschau: `zusammenbau`.
+Teile: `rahmen`, `rahmen_ohne_h`, `rahmen_2farbig`, `h_einlage`, `rueckteil`, `mast`, `verbinder`, `sockel`, `boden`, `passtest`, Vorschau: `zusammenbau`.
