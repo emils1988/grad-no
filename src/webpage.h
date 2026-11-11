@@ -29,7 +29,7 @@ table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--mute);font-weight:500;font-size:12px}
 td.t{color:var(--amber);white-space:nowrap}td.d{color:var(--red);white-space:nowrap}td.m{text-align:right;white-space:nowrap}
 .badge{display:inline-block;padding:2px 7px;border-radius:5px;background:#a81923;color:#fff;font-size:13px;white-space:nowrap}
-.badge.bus{background:#4b4e5c}.badge.s{background:var(--blue)}
+.badge.bus{background:#4b4e5c}.badge.s{background:var(--blue)}.badge.tram{background:#c82828}.badge.metro{background:#6e3ca0}
 .cancel td{color:var(--red)!important;text-decoration:line-through}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .chip{padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#0f1118;cursor:pointer;font-size:13px}
@@ -60,20 +60,32 @@ a{color:var(--amber)}
   <div class="row">
     <div><label>Haltestelle suchen (Bahnhof oder Bushaltestelle)</label>
       <input id="q" placeholder="z.B. Villach Hbf" onkeydown="if(event.key==='Enter')search()"></div>
+    <div style="max-width:250px"><label>Datenquelle</label><select id="prov" onchange="$('q').placeholder=this.value==1?'z.B. Hauptbahnhof, Praterstern':'z.B. Villach Hbf'">
+      <option value="0">ÖBB Scotty (ganz Österreich)</option>
+      <option value="1">Wiener Linien (Echtzeit direkt)</option></select></div>
     <button style="flex:0" onclick="search()">Suchen</button>
   </div>
   <div id="results"></div>
-  <p class="muted">Bis zu 8 Haltestellen. Am Display rechts/links tippen zum Weiterschalten.
-  <b>Gehzeit</b> blendet Abfahrten aus, die du nicht mehr erreichst. <b>Richtung</b> filtert nach Zielen (Komma-getrennt, Teilwörter reichen).</p>
+  <p class="muted">Bis zu 8 Haltestellen. Am Display: rechts/links tippen = Haltestelle wechseln,
+  <b>Doppeltipp auf einen Zug</b> = Wagenreihung (ÖBB-Fernverkehr).
+  <b>Gehzeit</b> blendet Abfahrten aus, die du nicht mehr erreichst. <b>Vorschau</b> legt fest, wie weit in die Zukunft
+  Abfahrten angezeigt werden (Standard 60 Minuten, bis 24 Stunden). <b>Richtung</b> filtert nach Zielen,
+  <b>Linien</b> nach Liniennamen (je Komma-getrennt, z.B. „S1, REX 7“ oder „U1, 13A“). Beide Filter lassen sich kombinieren.
+  Scotty enthält auch Wiener Linien, Graz Linien, Postbus usw. Die Quelle „Wiener Linien“ holt die Echtzeitdaten direkt
+  von den Wiener Linien (Daten: Stadt Wien – data.wien.gv.at, CC BY 4.0).</p>
 </section>
 
 <section class="card">
   <h2>Anzeige</h2>
   <div class="grid2">
-    <div><label>Abfrage alle … Sekunden</label><input type="number" id="interval" min="20" max="600"></div>
+    <div><label>Abfrage alle … Sekunden (mindestens 20)</label><input type="number" id="interval" min="20" max="600"
+      onchange="if(+this.value<20){this.value=20;toast('Das Abfrageintervall ist mindestens 20 Sekunden')}else if(+this.value>600){this.value=600}"></div>
     <div><label>Ausrichtung</label><select id="rotation"><option value="1">Querformat (USB rechts)</option><option value="3">Querformat gedreht (USB links)</option></select></div>
     <div><label>Helligkeit Tag: <span id="bdv"></span></label><input type="range" id="brightDay" min="5" max="255"></div>
     <div><label>Helligkeit Nacht: <span id="bnv"></span> (0 = aus, Tippen weckt)</label><input type="range" id="brightNight" min="0" max="255"></div>
+    <div><label>Haltestellen automatisch wechseln alle … Sekunden (0 = aus)</label><input type="number" id="autoSec" min="0" max="3600"
+      onchange="if(+this.value>0&&+this.value<30){this.value=30;toast('Mindestens 30 Sekunden (oder 0 = aus)')}"></div>
+    <div></div>
     <div><label>Nacht von (Uhr)</label><input type="number" id="nightFrom" min="0" max="23"></div>
     <div><label>Nacht bis (Uhr)</label><input type="number" id="nightTo" min="0" max="23"></div>
   </div>
@@ -90,7 +102,9 @@ a{color:var(--amber)}
   <div class="row"><div><input type="file" id="fw" accept=".bin"></div>
     <button style="flex:0" class="pri" onclick="upload()">Hochladen</button></div>
   <progress id="prog" value="0" max="100" style="display:none;margin-top:8px"></progress>
-  <p class="muted">Datei aus PlatformIO: <code>.pio/build/cyd/firmware.bin</code></p>
+  <p id="fwhint" class="muted">Datei <code>firmware-…-ota.bin</code> aus den GitHub-Releases (oder aus PlatformIO: <code>.pio/build/cyd/firmware.bin</code>).<br>
+  <b>Geduld:</b> Das Update kann ein paar Minuten dauern, und am Anfang kann es eine Weile dauern, bis der Fortschrittsbalken
+  sich bewegt. Seite nicht schließen und das Gerät nicht ausstecken – es startet am Ende von selbst neu.</p>
   <h3 style="font-size:14px;margin:16px 0 8px">Passwort (Benutzer: admin)</h3>
   <div class="row"><div><input type="password" id="pw" placeholder="neues Passwort"></div>
     <button style="flex:0" onclick="setPw()">Ändern</button></div>
@@ -113,7 +127,10 @@ async function api(url,opt){const r=await fetch(url,opt);let j={};try{j=await r.
 async function post(url,msg){try{await api(url,{method:'POST'});toast(msg)}catch(e){toast(e.message)}}
 
 const FILTERS=['Alle Verkehrsmittel','Nur Züge','Nur Bus/Tram/U-Bahn'];
-const settingIds=['interval','rotation','brightDay','brightNight','nightFrom','nightTo'];
+const THEMES=['Standard (dunkel, Bernstein)','ÖBB-Blau','Wiener Linien (schwarz/grau)','Eigene Farben'];
+const COLOR_LABELS=['Hintergrund','Kopfzeile','Schrift','Akzent'];
+const PROVIDERS=['ÖBB Scotty','Wiener Linien'];
+const settingIds=['interval','rotation','brightDay','brightNight','nightFrom','nightTo','autoSec'];
 
 async function load(){
   cfg=await api('/api/config');
@@ -123,7 +140,7 @@ async function load(){
   $('bdv').textContent=cfg.brightDay;$('bnv').textContent=cfg.brightNight;
   renderStations();loadBoard();loadSys();
 }
-for(const id of ['interval','rotation','brightDay','brightNight','nightFrom','nightTo','touchMirror','invert'])
+for(const id of ['interval','rotation','brightDay','brightNight','nightFrom','nightTo','autoSec','touchMirror','invert'])
   $(id).addEventListener('input',()=>{setDirty();$('bdv').textContent=$('brightDay').value;$('bnv').textContent=$('brightNight').value});
 
 function renderStations(){
@@ -132,7 +149,7 @@ function renderStations(){
   else box.innerHTML=cfg.stations.map((s,i)=>`
    <div class="st">
     <div class="head"><input value="${esc(s.name)}" oninput="cfg.stations[${i}].name=this.value;setDirty();renderChips()">
-     <span class="id">ID ${esc(s.id)}</span>
+     <span class="id">${PROVIDERS[s.provider||0]} · ID ${esc(s.id)}</span>
      <button class="sm" onclick="move(${i},-1)" ${i==0?'disabled':''}>↑</button>
      <button class="sm" onclick="move(${i},1)" ${i==cfg.stations.length-1?'disabled':''}>↓</button>
      <button class="sm danger" onclick="del(${i})">✕</button></div>
@@ -140,7 +157,15 @@ function renderStations(){
      <div><label>Verkehrsmittel</label><select onchange="cfg.stations[${i}].filter=+this.value;setDirty()">
       ${FILTERS.map((f,k)=>`<option value="${k}" ${s.filter==k?'selected':''}>${f}</option>`).join('')}</select></div>
      <div><label>Richtung (optional)</label><input value="${esc(s.direction)}" placeholder="z.B. Villach, Klagenfurt" oninput="cfg.stations[${i}].direction=this.value;setDirty()"></div>
-     <div style="max-width:120px"><label>Gehzeit (min)</label><input type="number" min="0" max="60" value="${s.walk||0}" oninput="cfg.stations[${i}].walk=+this.value;setDirty()"></div>
+     <div><label>Linien (optional)</label><input value="${esc(s.lines||'')}" placeholder="z.B. S1, REX 7" oninput="cfg.stations[${i}].lines=this.value;setDirty()"></div>
+     <div style="max-width:110px"><label>Gehzeit (min)</label><input type="number" min="0" max="60" value="${s.walk||0}" oninput="cfg.stations[${i}].walk=+this.value;setDirty()"></div>
+     <div style="max-width:120px"><label>Vorschau (min)</label><input type="number" min="10" max="1440" value="${s.ahead||60}" title="Nur Abfahrten in den nächsten … Minuten anzeigen (10 bis 1440)" oninput="cfg.stations[${i}].ahead=+this.value;setDirty()" onchange="if(+this.value<10)this.value=10;if(+this.value>1440)this.value=1440;cfg.stations[${i}].ahead=+this.value"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+     <div><label>Farbschema</label><select onchange="cfg.stations[${i}].theme=+this.value;setDirty();renderStations()">
+      ${THEMES.map((f,k)=>`<option value="${k}" ${(s.theme||0)==k?'selected':''}>${f}</option>`).join('')}</select></div>
+     ${(s.theme||0)==3?COLOR_LABELS.map((l,k)=>`<div style="max-width:90px"><label>${l}</label><input type="color" value="${(s.colors||[])[k]||'#000000'}" style="height:38px;padding:2px" oninput="cfg.stations[${i}].colors[${k}]=this.value;setDirty()"></div>`).join(''):''}
+     ${(s.provider||0)==0?`<div style="max-width:200px"><label>EVA-Nr. Wagenreihung</label><input value="${esc(s.eva||'')}" placeholder="automatisch" oninput="cfg.stations[${i}].eva=this.value.trim();setDirty()"></div>`:''}
     </div></div>`).join('');
   renderChips();
 }
@@ -154,7 +179,9 @@ async function search(){
   const q=$('q').value.trim();if(q.length<2)return;
   $('results').innerHTML='<p class="muted">Suche …</p>';
   try{
-    const j=await api('/api/search?q='+encodeURIComponent(q));
+    const p=+$('prov').value;
+    const j=await api('/api/search?p='+p+'&q='+encodeURIComponent(q));
+    j.results.forEach(r=>r.provider=p);
     if(!j.results.length){$('results').innerHTML='<p class="muted">Nichts gefunden.</p>';return}
     lastResults=j.results;
     $('results').innerHTML=j.results.map((r,i)=>`<div class="res"><span>${esc(r.name)} <span class="muted">(${esc(r.id)})</span></span>
@@ -163,9 +190,13 @@ async function search(){
 }
 function add(r){
   if(cfg.stations.length>=8){toast('Maximal 8 Haltestellen');return}
-  if(cfg.stations.some(s=>s.id==r.id)){toast('Schon in der Liste');return}
-  cfg.stations.push({id:r.id,name:r.name,filter:0,direction:'',walk:0});
-  $('results').innerHTML='';$('q').value='';setDirty();renderStations();toast(r.name+' hinzugefügt – Speichern nicht vergessen');
+  // dieselbe Haltestelle darf mehrfach vorkommen (z.B. einmal nur Züge, einmal nur Bus 11)
+  const same=cfg.stations.filter(s=>s.id==r.id&&(s.provider||0)==r.provider).length;
+  const name=same?r.name+' ('+(same+1)+')':r.name;
+  cfg.stations.push({id:r.id,name:name,provider:r.provider||0,filter:0,direction:'',lines:'',walk:0,ahead:60,
+    theme:r.provider==1?2:0,colors:['#000000','#161822','#ffffff','#ffb000'],eva:''});
+  $('results').innerHTML='';$('q').value='';setDirty();renderStations();
+  toast(same?name+' zusätzlich hinzugefügt – z.B. mit eigenem Linien- oder Verkehrsmittelfilter. Speichern nicht vergessen':r.name+' hinzugefügt – Speichern nicht vergessen');
 }
 
 async function save(){
@@ -183,9 +214,10 @@ async function showOn(i){
   try{await api('/api/show?i='+i,{method:'POST'})}catch(e){}
   setTimeout(loadBoard,1500);
 }
-async function refresh(){await post('/api/refresh','Wird abgefragt …');setTimeout(loadBoard,2500)}
+async function refresh(){try{const r=await api('/api/refresh',{method:'POST'});
+  if(r.ok){toast('Wird abgefragt …');setTimeout(loadBoard,2500)}else toast('Nächste Abfrage frühestens in '+r.wait+' s (Abfrageintervall)')}catch(e){toast(e.message)}}
 
-function badgeClass(l){l=l.toLowerCase();if(/^(bus|ast|tram|str|nachtbus|citybus|rufbus)|^u ?\d/.test(l))return'bus';if(/^s ?\d/.test(l))return's';return''}
+function badgeClass(d){return ['','s','bus','tram','metro'][d.kind||0]||''}
 async function loadBoard(){
   if(!cfg||!cfg.stations.length){$('board').innerHTML='';return}
   try{
@@ -194,13 +226,30 @@ async function loadBoard(){
     const now=Date.now()/1000;
     if(!b.deps.length){$('board').innerHTML='<p class="muted">'+(b.error?esc(b.error):(b.age<0?'Noch nicht abgefragt':'Keine Abfahrten'))+'</p>'}
     else $('board').innerHTML='<table><tr><th>Zeit</th><th></th><th>Linie</th><th>Ziel</th><th>Gl./Steig</th><th style="text-align:right">in</th></tr>'+
-      b.deps.map(d=>{const m=d.when?Math.floor((d.when-now)/60):null;
+      b.deps.map((d,i)=>{const m=d.when?Math.floor((d.when-now)/60):null;
         return `<tr class="${d.cancelled?'cancel':''}"><td class="t">${esc(d.time)}</td>
         <td class="d">${d.cancelled?'fällt aus':(d.delay>0?'+'+d.delay:'')}</td>
-        <td><span class="badge ${badgeClass(d.line)}">${esc(d.line)}</span></td><td>${esc(d.dest)}</td>
-        <td class="muted">${esc(d.platform)}</td><td class="m">${m===null?'':(m<=0?'jetzt':(m<60?m+' min':''))}</td></tr>`}).join('')+'</table>';
+        <td><span class="badge ${badgeClass(d)}">${esc(d.line)}</span></td><td>${esc(d.dest)}
+        ${d.train?`<button class="sm" style="margin-left:6px" onclick="showFormationWeb(${b.index},${i})">Wagen</button>`:''}</td>
+        <td class="muted">${esc(d.platform)}</td><td class="m">${m===null?'':(m<=0?'jetzt':(m<60?m+' min':''))}</td></tr>`}).join('')+'</table><div id="formation"></div>';
     $('boardInfo').textContent=b.age>=0?('Stand vor '+b.age+' s'+(b.ok?'':' – letzter Versuch: '+b.error)):'';
   }catch(e){$('board').innerHTML='<p class="muted">'+esc(e.message)+'</p>'}
+}
+
+async function showFormationWeb(si,row){
+  const box=$('formation');box.innerHTML='<p class="muted">Lade Wagenreihung …</p>';
+  try{const f=await api('/api/formation?i='+si+'&row='+row);
+    if(!f.ok){box.innerHTML='<p class="muted">'+esc(f.error||'Keine Daten')+(f.eva?' (EVA '+esc(f.eva)+')':'')+'</p>';return}
+    const cls=w=>w.kind==2?'Lok':(w.features&64?(w.first?'1/S':'S'):(w.business?'B':(w.first?'1':(w.second?'2':'–'))));
+    const ic=w=>(w.bikes?'🚲':'')+(w.wheelchairs?'♿':'')+(w.features&128?'🤫':'')+(w.features&32?'👪':'');
+    const load=w=>w.load?'●'.repeat(w.load)+'○'.repeat(3-w.load):'';
+    box.innerHTML=`<h3 style="font-size:14px;margin:14px 0 6px">${esc(f.title)} · Gleis ${esc(f.platform)}</h3>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">${f.wagons.map(w=>`<div title="${esc(f.parts[w.part]||'')}" style="min-width:42px;text-align:center;
+        border:1px solid var(--line);border-radius:6px;padding:4px;background:${w.kind==2?'#5a1d22':'#0f1118'};
+        ${w.first||w.business?'border-top:4px solid #ffd200':''}"><b>${cls(w)}</b><br><span class="muted">${w.nr||''}</span>
+        <br>${ic(w)}<br><span style="color:var(--amber)">${load(w)}</span></div>`).join('')}</div>
+      <p class="muted">Zugteile: ${f.parts.map(esc).join(' · ')} · EVA ${esc(f.eva)}</p>`;
+  }catch(e){box.innerHTML='<p class="muted">'+esc(e.message)+'</p>'}
 }
 
 async function loadSys(){
@@ -223,8 +272,10 @@ function upload(){
   const f=$('fw').files[0];if(!f){toast('Bitte .bin-Datei wählen');return}
   if(!f.name.endsWith('.bin')&&!confirm('Datei endet nicht auf .bin – trotzdem hochladen?'))return;
   const fd=new FormData();fd.append('firmware',f,f.name);
-  const x=new XMLHttpRequest();const p=$('prog');p.style.display='block';p.value=0;
-  x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded/e.total*100};
+  const x=new XMLHttpRequest();const p=$('prog');p.style.display='block';p.removeAttribute('value');
+  toast('Update läuft – das kann ein paar Minuten dauern …');
+  x.upload.onloadstart=()=>{p.removeAttribute('value')};
+  x.upload.onprogress=e=>{if(e.lengthComputable&&e.loaded>0)p.value=e.loaded/e.total*100};
   x.onload=()=>{if(x.status==200){toast('Update OK – Neustart, Seite lädt in 15 s neu');setTimeout(()=>location.reload(),15000)}else{toast(x.responseText||'Update fehlgeschlagen');p.style.display='none'}};
   x.onerror=()=>{toast('Verbindung abgebrochen');p.style.display='none'};
   x.open('POST','/update');x.send(fd);

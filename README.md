@@ -3,8 +3,8 @@
 **Die Abfahrtsanzeige für den Schreibtisch**, damit du den Zug (oder Bus) grad no derwischst.
 
 Eine kleine Abfahrtstafel für Bahn und Bus in Österreich: ein **ESP32 mit 2,8"-Touchdisplay**
-(„Cheap Yellow Display“, ca. 15 €) holt die Abfahrten direkt aus der ÖBB-Fahrplanauskunft *Scotty*,
-mit Echtzeit-Verspätungen und Ausfällen. Kein Server, kein Home Assistant, keine App nötig:
+(„Cheap Yellow Display“, ca. 15 €) holt die Abfahrten direkt aus der ÖBB-Fahrplanauskunft *Scotty*
+oder von den Wiener Linien, mit Echtzeit-Verspätungen und Ausfällen. Kein Server, kein Home Assistant, keine App nötig:
 anstecken, WLAN einrichten, Haltestelle im Browser suchen, fertig.
 
 <p align="center">
@@ -16,15 +16,18 @@ anstecken, WLAN einrichten, Haltestelle im Browser suchen, fertig.
   <sub>Umschalten zwischen den Haltestellen per Tippen · <a href="docs/demo.mp4">Video in voller Qualität</a></sub>
 </p>
 
-> **Hinweis:** Privates Bastelprojekt, **nicht von den ÖBB** und nicht mit ihnen verbunden.
-> Es nutzt die öffentlich erreichbaren, aber nicht offiziell dokumentierten Scotty-Schnittstellen.
-> Die können sich jederzeit ändern. Bitte sparsam abfragen (Standard: alle 60 s).
+> **Hinweis:** Privates Bastelprojekt, **nicht von den ÖBB oder den Wiener Linien** und nicht mit ihnen verbunden.
+> Es nutzt öffentlich erreichbare, aber nicht offiziell dokumentierte Schnittstellen von ÖBB Scotty und ÖBB Live
+> (Wagenreihung). Die können sich jederzeit ändern. Bitte sparsam abfragen (Standard: alle 60 s, mindestens 20 s).
 
 ## Funktionen
 
-- Bis zu **8 Haltestellen** (Bahnhof oder Bushaltestelle), umschalten durch Tippen aufs Display
-- Pro Haltestelle: Filter **Zug / Bus**, **Richtungsfilter**, **Gehzeit** (nicht mehr erreichbare Abfahrten ausblenden)
-- Anzeige: Abfahrtszeit, Verspätung, Linie, Ziel, Gleis/Steig, Countdown in Minuten, Ausfälle
+- Bis zu **8 Haltestellen** (Bahnhof oder Bushaltestelle), umschalten durch Tippen oder **automatisch** (Standard alle 2 Minuten)
+- Datenquellen: **ÖBB Scotty** (ganz Österreich inkl. Postbus, Wiener Linien, Graz Linien …) oder **Wiener Linien** direkt (Echtzeit)
+- Pro Haltestelle: Filter **Zug / Bus**, **Richtung**, **Linien** (kombinierbar), **Gehzeit**, **Vorschau** (wie weit in die Zukunft, Standard 60 min) und **Farbschema** (Standard, ÖBB-Blau, Wiener Linien oder eigene Farben)
+- Dieselbe Haltestelle kann mehrfach mit unterschiedlichen Filtern angelegt werden (z.B. einmal Züge, einmal Bus 11)
+- Anzeige: 8 Abfahrten mit Zeit, Verspätung, Linie, Ziel, Gleis/Steig, Countdown in Minuten, Ausfälle
+- **Wagenreihung**: Doppeltipp auf einen ÖBB-Fernverkehrszug zeigt Wagen, Klassen, Zugteile, Speisewagen, Rad-/Rollstuhlplätze und Auslastung
 - **Weboberfläche** unter `http://grad-no.local` mit Haltestellensuche, Einstellungen und Live-Vorschau
 - **Firmware-Update im Browser** (OTA), passwortgeschützt
 - WLAN-Einrichtung über einen Hotspot, Nachtmodus (dimmen oder aus)
@@ -81,6 +84,7 @@ pio device monitor     # serielle Ausgabe (115200 Baud)
 |---|---|
 | rechts tippen | nächste Haltestelle |
 | links tippen | vorige Haltestelle |
+| Doppeltipp auf einen Zug | Wagenreihung (ÖBB-Fernverkehr: RJ, RJX, IC, EC, NJ …); Tippen schließt sie |
 | 1,2 s gedrückt halten | Info (IP-Adresse, WLAN, Version) |
 | BOOT-Taste kurz / lang | nächste Haltestelle / Info |
 
@@ -96,7 +100,10 @@ Die Einstellungen bleiben dabei erhalten.
 |---|---|
 | Display weiß, negativ oder falsche Farben | In der Weboberfläche „Farben invertieren“. Bei CYD-Varianten mit 2 USB-Buchsen in `platformio.ini` `-DILI9341_2_DRIVER=1` durch `-DST7789_DRIVER=1` oder `-DILI9341_DRIVER=1` ersetzen |
 | Touch links/rechts vertauscht | „Touch vertauscht“ aktivieren; Kalibrierung über `TOUCH_*` in `src/display.cpp` |
-| Keine Abfahrten, Fehlermeldung | *System → Debug: Rohdaten* zeigt die letzte Anfrage und die Antwort von Scotty, beim Melden eines Fehlers bitte mitschicken |
+| Keine Abfahrten, Fehlermeldung | *System → Debug: Rohdaten* zeigt die letzte Anfrage und die Antwort, beim Melden eines Fehlers bitte mitschicken |
+| Roter Punkt neben der Uhr | Die letzte Abfrage ist fehlgeschlagen, es werden die zuletzt geladenen Abfahrten gezeigt |
+| Wiener-Linien-Haltestelle nicht gefunden | Ohne „Wien“ suchen, z.B. „Hauptbahnhof“ oder „Praterstern“ |
+| Abfahrt doppelt oder falsche Haltestelle | Statt der Sammelhaltestelle (z.B. „Spittal/Drau“) den genauen Haltepunkt wählen (z.B. „Spittal/Drau-Millstätter See Bahnhof“) |
 | `grad-no.local` geht nicht | IP-Adresse verwenden (am Display lange drücken) |
 | Anderes WLAN | *System → WLAN zurücksetzen*, danach startet der Setup-Hotspot |
 | Passwort vergessen | Mit esptool-js *Erase Flash* und neu flashen |
@@ -105,15 +112,18 @@ Die Einstellungen bleiben dabei erhalten.
 
 | Datei | Inhalt |
 |---|---|
-| `src/hafas.cpp` | Scotty-Abfragen (Abfahrtstafel `stboard.exe`, Suche `ajax-getstop.exe`), Parsing, Umlaute |
+| `src/hafas.cpp` | Datenquellen: Scotty (`stboard.exe`, `ajax-getstop.exe`), Wiener Linien (OGD-Monitor, Haltestellenliste), Wagenreihung (ÖBB Live) |
 | `src/display.cpp` | Darstellung (TFT_eSPI), Touch (XPT2046), Hintergrundbeleuchtung |
 | `src/web.cpp`, `src/webpage.h` | Webserver, JSON-API, OTA-Upload, Weboberfläche |
 | `src/main.cpp` | WLAN, Zeit, Abruf-Task, Bedienung, Nachtmodus |
 | `src/config.*` | Einstellungen (im NVS-Flash gespeichert) |
 | `web/` | Installationsseite für GitHub Pages (ESP Web Tools) |
+| `test/` | Tests der Datenauswertung am PC (laufen bei jedem Build auf GitHub mit) |
 
-JSON-API (Basic Auth): `GET/POST /api/config`, `GET /api/search?q=`, `GET /api/board?i=`, `POST /api/show?i=`,
-`POST /api/refresh`, `GET /api/status`, `GET /api/raw`, `POST /update`.
+JSON-API (Basic Auth): `GET/POST /api/config`, `GET /api/search?p=<0 Scotty|1 Wiener Linien>&q=`, `GET /api/board?i=`,
+`GET /api/formation?i=&row=`, `POST /api/show?i=`, `POST /api/refresh`, `GET /api/status`, `GET /api/raw`, `POST /update`.
+
+Änderungen je Version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Mitmachen
 
@@ -129,4 +139,5 @@ Verwendete Bibliotheken: [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) (Bodmer)
 [WiFiManager](https://github.com/tzapu/WiFiManager) (tzapu),
 [ArduinoJson](https://arduinojson.org) (Benoît Blanchon),
 [ESP Web Tools](https://esphome.github.io/esp-web-tools/) (ESPHome). Es gelten deren jeweilige Lizenzen.
-Fahrplandaten: ÖBB Scotty.
+Fahrplandaten: ÖBB Scotty, Wagenreihung: ÖBB Live.
+Echtzeitdaten der Wiener Linien: Datenquelle Stadt Wien – [data.wien.gv.at](https://data.wien.gv.at), Lizenz CC BY 4.0.

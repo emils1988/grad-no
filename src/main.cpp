@@ -2,6 +2,7 @@
 //
 // Bedienung am Gerät:
 //   Tippen rechts / links   -> nächste / vorige Haltestelle
+//   Doppeltipp auf einen Zug -> Wagenreihung (ÖBB-Fernverkehr, Daten von live.oebb.at)
 //   lange drücken (1,2 s)   -> Info (IP-Adresse, WLAN, Version)
 //   BOOT-Taste kurz / lang  -> nächste Haltestelle / Info
 // Einrichtung: http://grad-no.local  (Benutzer admin, Passwort Standard "gradno")
@@ -26,6 +27,8 @@ static TaskHandle_t  fetchTaskHandle = nullptr;
 static volatile bool dirty = true;        // Anzeige neu zeichnen
 static volatile bool forceFetch = true;   // sofort abfragen
 static bool          infoShown = false;
+static bool          detailShown = false;  // Wagenreihung wird angezeigt
+static uint32_t      detailUntil = 0;
 static uint32_t      wakeUntil = 0;       // Nachtmodus: durch Touch kurz aufwecken
 static uint32_t      saveCurrentAt = 0;   // verzögertes Speichern der gewählten Haltestelle
 
@@ -33,32 +36,52 @@ static uint32_t      saveCurrentAt = 0;   // verzögertes Speichern der gewählt
 
 static Board fetchBuf;   // statisch: nicht auf dem Task-Stack
 
+// Letzter Abrufversuch je Haltestelle. Eine Haltestelle wird frühestens nach Ablauf des
+// Abfrageintervalls wieder abgefragt – auch beim Umschalten, "Jetzt abfragen" oder nach Fehlern.
+static uint32_t lastAttempt[MAX_STATIONS];
+static char     lastAttemptId[MAX_STATIONS][16];
+
+// Sekunden bis zur nächsten erlaubten Abfrage (0 = sofort). Aufrufer hält dataMutex.
+static uint32_t secondsUntilAllowed(uint8_t idx) {
+  if (idx >= cfg.stationCount) return 0;
+  const Station& st = cfg.stations[idx];
+  if (lastAttempt[idx] == 0 || strcmp(lastAttemptId[idx], st.id) != 0) return 0;
+  uint32_t interval = max((uint32_t)MIN_INTERVAL, (uint32_t)cfg.intervalSec) * 1000UL;
+  uint32_t since = millis() - lastAttempt[idx];
+  return since >= interval ? 0 : (interval - since + 999) / 1000;
+}
+
+uint32_t appSecondsUntilRefresh() {
+  xSemaphoreTake(dataMutex, portMAX_DELAY);
+  uint32_t s = secondsUntilAllowed(cfg.current);
+  xSemaphoreGive(dataMutex);
+  return s;
+}
+
 static void fetchTask(void*) {
-  uint32_t nextDue = 0;
   for (;;) {
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
     if (otaRunning || WiFi.status() != WL_CONNECTED) continue;
 
     Station st;
     uint8_t idx;
-    uint16_t interval;
     xSemaphoreTake(dataMutex, portMAX_DELAY);
     bool have = cfg.stationCount > 0;
     idx = cfg.current;
     if (have) st = cfg.stations[idx];
-    interval = cfg.intervalSec;
+    bool due = have && secondsUntilAllowed(idx) == 0;
     xSemaphoreGive(dataMutex);
-    if (!have) continue;
-
-    if (!forceFetch && (int32_t)(millis() - nextDue) < 0) continue;
+    if (!due) continue;
     forceFetch = false;
 
     if (xSemaphoreTake(netMutex, pdMS_TO_TICKS(20000)) != pdTRUE) continue;
-    bool ok = hafasFetchBoard(st, fetchBuf);
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    lastAttempt[idx] = millis();
+    if (lastAttempt[idx] == 0) lastAttempt[idx] = 1;
+    strlcpy(lastAttemptId[idx], st.id, sizeof(lastAttemptId[idx]));
+    xSemaphoreGive(dataMutex);
+    bool ok = fetchBoard(st, fetchBuf);
     xSemaphoreGive(netMutex);
-
-    // bei Fehler nach 20 s erneut versuchen
-    nextDue = millis() + (ok ? interval * 1000UL : 20000UL);
 
     xSemaphoreTake(dataMutex, portMAX_DELAY);
     // nur übernehmen, wenn die Haltestelle inzwischen nicht geändert wurde
@@ -85,25 +108,40 @@ void appRequestRefresh() {
   if (fetchTaskHandle) xTaskNotifyGive(fetchTaskHandle);
 }
 
-void appSelectStation(uint8_t idx) {
+static uint32_t lastSwitchMs = 0;   // letzter Wechsel/letzte Bedienung (für das automatische Weiterschalten)
+
+void appSelectStation(uint8_t idx, bool remember) {
   bool stale;
   xSemaphoreTake(dataMutex, portMAX_DELAY);
   if (idx >= cfg.stationCount) { xSemaphoreGive(dataMutex); return; }
   cfg.current = idx;
-  stale = boards[idx].fetchedMs == 0 || millis() - boards[idx].fetchedMs > 30000;
+  stale = secondsUntilAllowed(idx) == 0;   // sonst bleibt die zwischengespeicherte Tafel
   xSemaphoreGive(dataMutex);
-  saveCurrentAt = millis() + 5000;
+  if (remember) saveCurrentAt = millis() + 5000;   // automatisches Weiterschalten schreibt nicht in den Flash
+  lastSwitchMs = millis();
   infoShown = false;
+  detailShown = false;
   dirty = true;
   if (stale) appRequestRefresh();
 }
 
 void appConfigChanged() {
   xSemaphoreTake(dataMutex, portMAX_DELAY);
-  for (int i = 0; i < MAX_STATIONS; i++) memset(&boards[i], 0, sizeof(Board));
+  for (int i = 0; i < MAX_STATIONS; i++) {
+    bool same = i < cfg.stationCount && lastAttempt[i] && !strcmp(lastAttemptId[i], cfg.stations[i].id);
+    if (!same) {
+      // andere Haltestelle auf diesem Platz: alte Tafel verwerfen, sofort abfragen
+      memset(&boards[i], 0, sizeof(Board));
+      lastAttempt[i] = 0;
+    } else if (millis() - lastAttempt[i] >= MIN_INTERVAL * 1000UL) {
+      // gleiche Haltestelle, Filter evtl. geändert: neu abfragen, aber nie öfter als alle MIN_INTERVAL Sekunden
+      lastAttempt[i] = 0;
+    }
+  }
   xSemaphoreGive(dataMutex);
   displayApplySettings();
   infoShown = false;
+  detailShown = false;
   dirty = true;
   appRequestRefresh();
 }
@@ -167,37 +205,128 @@ static void stepStation(int dir) {
   appSelectStation((cur + total + dir) % total);
 }
 
+static void closeOverlays() {
+  infoShown = false;
+  detailShown = false;
+  dirty = true;
+}
+
 static void onShortPress(int x) {
+  lastSwitchMs = millis();   // nach Bedienung erst wieder nach der vollen Zeit automatisch weiter
   bool wasDark = screenDark();
   wakeUntil = millis() + 30000;
   if (wasDark) return;                       // erster Tipp weckt nur auf
-  if (infoShown) { infoShown = false; dirty = true; return; }
+  if (infoShown || detailShown) { closeOverlays(); return; }
   stepStation(x >= 160 ? +1 : -1);
+}
+
+// Doppeltipp auf eine Zeile: Wagenreihung des Zuges anzeigen
+static Formation formation;   // statisch: nicht auf dem Stack
+static void showFormation(int y) {
+  int rowIdx = displayRowAt(y);
+  Departure dep;
+  Station st;
+  String stationName;
+  uint8_t idx;
+  bool have = false;
+  xSemaphoreTake(dataMutex, portMAX_DELAY);
+  idx = cfg.current;
+  if (idx < cfg.stationCount && rowIdx >= 0 && rowIdx < boards[idx].count) {
+    dep = boards[idx].deps[rowIdx];
+    st = cfg.stations[idx];
+    stationName = boards[idx].stationName[0] ? String(boards[idx].stationName) : String(st.name);
+    have = true;
+  }
+  xSemaphoreGive(dataMutex);
+  if (!have) return;
+
+  detailShown = true;
+  detailUntil = millis() + 60000;
+  memset(&formation, 0, sizeof(formation));
+  if (st.provider != PROV_SCOTTY || dep.trainNr == 0) {
+    strlcpy(formation.error, "Wagenreihung nur fuer OeBB-Fernverkehr", sizeof(formation.error));
+    displayFormation(formation, dep, st);
+    return;
+  }
+  displayFormationLoading(dep, st);
+  if (xSemaphoreTake(netMutex, pdMS_TO_TICKS(20000)) != pdTRUE) {
+    strlcpy(formation.error, "Netzwerk beschaeftigt", sizeof(formation.error));
+    displayFormation(formation, dep, st);
+    return;
+  }
+  // EVA-Nummer für live.oebb.at einmalig suchen und merken
+  if (st.eva[0] == 0) {
+    char eva[sizeof(st.eva)];
+    if (findEva(stationName, eva, sizeof(eva))) {
+      strlcpy(st.eva, eva, sizeof(st.eva));
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      if (idx < cfg.stationCount && !strcmp(cfg.stations[idx].id, st.id)) {
+        strlcpy(cfg.stations[idx].eva, eva, sizeof(cfg.stations[idx].eva));
+        configSave();
+      }
+      xSemaphoreGive(dataMutex);
+    }
+  }
+  if (st.eva[0] == 0) strlcpy(formation.error, "Bahnhof bei OeBB Live nicht gefunden", sizeof(formation.error));
+  else fetchFormation(dep.trainNr, st.eva, dep.date, formation);
+  xSemaphoreGive(netMutex);
+  if (!detailShown) return;   // inzwischen geschlossen
+  displayFormation(formation, dep, st);
+  detailUntil = millis() + 60000;
+}
+
+static void onDoubleTap(int x, int y) {
+  lastSwitchMs = millis();
+  bool wasDark = screenDark();
+  wakeUntil = millis() + 30000;
+  if (wasDark) return;
+  if (infoShown || detailShown) { closeOverlays(); return; }
+  showFormation(y);
 }
 
 static void onLongPress() {
   wakeUntil = millis() + 30000;
-  if (infoShown) { infoShown = false; dirty = true; }
+  if (infoShown || detailShown) closeOverlays();
   else showInfo();
 }
 
+#define DOUBLE_TAP_MS 350
+
 static void handleInput() {
-  // ---- Touch
+  // ---- Touch: Tipp, Doppeltipp, lange drücken
   static bool     down = false, longDone = false;
   static uint32_t downAt = 0, lastSeen = 0;
-  static int      downX = 0;
+  static int      downX = 0, downY = 0;
+  static bool     tapPending = false;     // erster Tipp wartet auf einen möglichen zweiten
+  static uint32_t tapAt = 0;
+  static int      tapX = 0, tapY = 0;
   int x, y;
   bool touching = touchRead(x, y);
   if (touching) {
     lastSeen = millis();
-    if (!down) { down = true; longDone = false; downAt = millis(); downX = x; }
+    if (!down) { down = true; longDone = false; downAt = millis(); downX = x; downY = y; }
   }
   if (down) {
-    if (!longDone && millis() - downAt > 1200) { longDone = true; onLongPress(); }
+    if (!longDone && millis() - downAt > 1200) { longDone = true; tapPending = false; onLongPress(); }
     if (millis() - lastSeen > 80) {          // losgelassen (entprellt)
       down = false;
-      if (!longDone) onShortPress(downX);
+      if (!longDone) {
+        if (tapPending && millis() - tapAt < DOUBLE_TAP_MS + 150 &&
+            abs(downX - tapX) < 40 && abs(downY - tapY) < 30) {
+          tapPending = false;
+          onDoubleTap(tapX, tapY);
+        } else {
+          tapPending = true;
+          tapAt = millis();
+          tapX = downX;
+          tapY = downY;
+        }
+      }
     }
+  }
+  if (tapPending && !down && millis() - tapAt > DOUBLE_TAP_MS) {
+    tapPending = false;
+    onShortPress(tapX);
   }
 
   // ---- BOOT-Taste
@@ -292,7 +421,16 @@ void loop() {
     xSemaphoreGive(dataMutex);
   }
 
-  if (dirty && !infoShown) {
+  if (detailShown && (int32_t)(millis() - detailUntil) >= 0) closeOverlays();
+
+  // Haltestellen automatisch weiterschalten (nicht während Info/Wagenreihung oder bei dunklem Display)
+  if (cfg.autoSec && cfg.stationCount > 1 && !infoShown && !detailShown && !screenDark() &&
+      millis() - lastSwitchMs >= cfg.autoSec * 1000UL) {
+    uint8_t next = (cfg.current + 1) % cfg.stationCount;
+    appSelectStation(next, false);
+  }
+
+  if (dirty && !infoShown && !detailShown) {
     dirty = false;
     redraw();
   }

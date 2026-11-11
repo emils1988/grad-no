@@ -45,11 +45,18 @@ jobs:
             VERSION="dev-${GITHUB_SHA::7}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          sed -i "s/\"1.0.0-dev\"/\"$VERSION\"/" src/config.h
+          sed -i -E "s/(#define FW_VERSION +)\"[^\"]*\"/\1\"$VERSION\"/" src/config.h
           grep -n "define FW_VERSION" src/config.h
 
       - name: Firmware bauen
         run: pio run -e cyd
+
+      - name: Tests der Datenauswertung (am PC)
+        run: |
+          g++ -std=gnu++17 -DARDUINO=10819 -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 -DARDUINOJSON_ENABLE_ARDUINO_STREAM=1 \
+              -DARDUINOJSON_ENABLE_ARDUINO_PRINT=1 -DARDUINOJSON_ENABLE_PROGMEM=0 \
+              -Itest/shim -I.pio/libdeps/cyd/ArduinoJson/src -o test_parser test/test_parser.cpp src/hafas.cpp
+          ./test_parser
 
       - name: Binärdateien zusammenstellen
         run: |

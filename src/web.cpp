@@ -66,9 +66,10 @@ static void handleSearch() {
   q.trim();
   if (q.length() < 2) { sendError(400, "Mindestens 2 Zeichen"); return; }
   if (xSemaphoreTake(netMutex, pdMS_TO_TICKS(15000)) != pdTRUE) { sendError(503, "Beschäftigt, bitte nochmal"); return; }
+  uint8_t provider = (uint8_t)constrain(server.arg("p").toInt(), 0, 1);
   JsonDocument doc;
   JsonArray arr = doc["results"].to<JsonArray>();
-  int n = hafasSearch(q, arr);
+  int n = searchStations(provider, q, arr);
   xSemaphoreGive(netMutex);
   if (n < 0) { sendError(502, "Suche fehlgeschlagen (Debug-Seite prüfen)"); return; }
   String s;
@@ -107,8 +108,67 @@ static void handleBoard() {
     o["delay"] = d.delay;
     o["cancelled"] = d.cancelled;
     o["when"] = (long)d.when;
+    o["kind"] = d.kind;
+    o["train"] = d.trainNr;
+    o["date"] = d.date;
   }
   xSemaphoreGive(dataMutex);
+  String s;
+  serializeJson(doc, s);
+  sendJson(200, s);
+}
+
+// Wagenreihung eines Zuges (Test/Debug): /api/formation?i=<Haltestelle>&row=<Zeile>
+static Formation webFormation;
+static void handleFormation() {
+  if (!auth()) return;
+  Departure dep;
+  Station st;
+  String stationName;
+  int si, row = server.arg("row").toInt();
+  xSemaphoreTake(dataMutex, portMAX_DELAY);
+  si = server.hasArg("i") ? server.arg("i").toInt() : cfg.current;
+  bool ok = si >= 0 && si < cfg.stationCount && row >= 0 && row < boards[si].count;
+  if (ok) {
+    dep = boards[si].deps[row];
+    st = cfg.stations[si];
+    stationName = boards[si].stationName[0] ? String(boards[si].stationName) : String(st.name);
+  }
+  xSemaphoreGive(dataMutex);
+  if (!ok) { sendError(404, "Keine Abfahrt"); return; }
+  if (!dep.trainNr) { sendError(400, "Keine Zugnummer (nur Fernverkehr)"); return; }
+  if (xSemaphoreTake(netMutex, pdMS_TO_TICKS(15000)) != pdTRUE) { sendError(503, "Beschäftigt, bitte nochmal"); return; }
+  char eva[sizeof(st.eva)];
+  strlcpy(eva, st.eva, sizeof(eva));
+  if (!eva[0] && findEva(stationName, eva, sizeof(eva))) {
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    if (si < cfg.stationCount && !strcmp(cfg.stations[si].id, st.id)) {
+      strlcpy(cfg.stations[si].eva, eva, sizeof(cfg.stations[si].eva));
+      configSave();
+    }
+    xSemaphoreGive(dataMutex);
+  }
+  bool fok = eva[0] && fetchFormation(dep.trainNr, eva, dep.date, webFormation);
+  xSemaphoreGive(netMutex);
+  JsonDocument doc;
+  doc["train"] = dep.trainNr;
+  doc["line"] = dep.line;
+  doc["eva"] = eva;
+  doc["ok"] = fok;
+  doc["error"] = eva[0] ? webFormation.error : "Bahnhof bei ÖBB Live nicht gefunden";
+  doc["title"] = webFormation.title;
+  doc["platform"] = webFormation.platform;
+  doc["loadInfo"] = webFormation.loadInfo;
+  JsonArray parts = doc["parts"].to<JsonArray>();
+  for (int i = 0; i < webFormation.partCount; i++) parts.add(webFormation.parts[i]);
+  JsonArray wa = doc["wagons"].to<JsonArray>();
+  for (int i = 0; i < webFormation.count; i++) {
+    const Wagon& g = webFormation.wagons[i];
+    JsonObject o = wa.add<JsonObject>();
+    o["kind"] = g.kind; o["nr"] = g.nr; o["first"] = g.first; o["second"] = g.second;
+    o["business"] = g.business; o["bikes"] = g.bikes; o["wheelchairs"] = g.wheelchairs;
+    o["load"] = g.load; o["features"] = g.features; o["part"] = g.part;
+  }
   String s;
   serializeJson(doc, s);
   sendJson(200, s);
@@ -123,6 +183,8 @@ static void handleShow() {
 
 static void handleRefresh() {
   if (!auth()) return;
+  uint32_t wait = appSecondsUntilRefresh();
+  if (wait > 0) { sendJson(200, String("{\"ok\":false,\"wait\":") + wait + "}"); return; }
   appRequestRefresh();
   sendJson(200, "{\"ok\":true}");
 }
@@ -242,6 +304,7 @@ void webBegin() {
   server.on("/api/search", HTTP_GET, handleSearch);
   server.on("/api/board", HTTP_GET, handleBoard);
   server.on("/api/show", HTTP_POST, handleShow);
+  server.on("/api/formation", HTTP_GET, handleFormation);
   server.on("/api/refresh", HTTP_POST, handleRefresh);
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/raw", HTTP_GET, handleRaw);
