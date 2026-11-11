@@ -92,6 +92,7 @@ jobs:
         with:
           files: dist/*.bin
           generate_release_notes: true
+          append_body: true    # Text, der beim Anlegen des Releases eingegeben wurde, bleibt erhalten
           body: |
             **Neu installieren:** `grad-no-komplett-${{ needs.build.outputs.version }}.bin` auf Adresse 0x0 flashen, oder einfach über die Installationsseite im Browser.
             **Update eines bestehenden Geräts:** `firmware-${{ needs.build.outputs.version }}-ota.bin` in der Weboberfläche unter System → Firmware-Update hochladen.
