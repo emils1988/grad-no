@@ -3,7 +3,7 @@
 
 // Bei Release-Builds ersetzt GitHub Actions diesen Wert durch die Version aus dem Git-Tag
 #ifndef FW_VERSION
-#define FW_VERSION   "1.1.0-dev"
+#define FW_VERSION   "1.1.1-dev"
 #endif
 #define HOSTNAME     "grad-no"
 #define MAX_STATIONS 8

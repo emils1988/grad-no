@@ -229,7 +229,7 @@ async function loadBoard(){
       b.deps.map((d,i)=>{const m=d.when?Math.floor((d.when-now)/60):null;
         return `<tr class="${d.cancelled?'cancel':''}"><td class="t">${esc(d.time)}</td>
         <td class="d">${d.cancelled?'fällt aus':(d.delay>0?'+'+d.delay:'')}</td>
-        <td><span class="badge ${badgeClass(d)}">${esc(d.line)}</span></td><td>${esc(d.dest)}
+        <td><span class="badge ${badgeClass(d)}">${esc(d.line)}</span></td><td>${d.changed?'<span style="color:#ffd200" title="Ziel geändert">⚠ '+esc(d.dest)+'</span>':esc(d.dest)}
         ${d.train?`<button class="sm" style="margin-left:6px" onclick="showFormationWeb(${b.index},${i})">Wagen</button>`:''}</td>
         <td class="muted">${esc(d.platform)}</td><td class="m">${m===null?'':(m<=0?'jetzt':(m<60?m+' min':''))}</td></tr>`}).join('')+'</table><div id="formation"></div>';
     $('boardInfo').textContent=b.age>=0?('Stand vor '+b.age+' s'+(b.ok?'':' – letzter Versuch: '+b.error)):'';

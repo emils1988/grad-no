@@ -109,6 +109,7 @@ static void handleBoard() {
     o["cancelled"] = d.cancelled;
     o["when"] = (long)d.when;
     o["kind"] = d.kind;
+    o["changed"] = d.destChanged;
     o["train"] = d.trainNr;
     o["date"] = d.date;
   }

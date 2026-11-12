@@ -40,7 +40,9 @@ int main() {
   setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); tzset();
   const std::string scottyFile = withTomorrow("test/data/scotty_board.txt");
   const std::string wlFile = withTomorrow("test/data/wl_monitor.json");
+  const std::string tullnFile = withTomorrow("test/data/scotty_tullnerfeld.txt");
   g_routes = {
+    {"https://fahrplan.oebb.at/bin/stboard.exe/dn?L=vs_scotty.vs_liveticker&evaId=001232120", tullnFile, 200},
     {"https://fahrplan.oebb.at/bin/stboard.exe", scottyFile, 200},
     {"https://www.wienerlinien.at/ogd_realtime/monitor?diva=60201040", wlFile, 200},
     {"https://www.wienerlinien.at/ogd_realtime/doku/ogd/wienerlinien-ogd-haltestellen.csv", "test/data/wl_stops.csv", 200},
@@ -71,6 +73,14 @@ int main() {
   { Station v = mk("1290401", PROV_SCOTTY); CHECK(fetchBoard(v, b)); CHECK(b.count == 8);
     for (auto& r : g_routes) if (r.file == scottyFile) r.truncateOnce = 2;
     CHECK(!fetchBoard(v, b)); std::cout << "  zweimal abgebrochen: " << b.error << "\n"; }
+
+  std::cout << "== Geändertes Ziel (Tullnerfeld, 12.11.2026)\n";
+  { Station v = mk("001232120", PROV_SCOTTY); CHECK(fetchBoard(v, b)); dump(b);
+    CHECK(b.count == 5);
+    CHECK(String(b.deps[2].dest) == "Wien Hbf" && b.deps[2].destChanged);      // <b> entfernt, "(Bahnsteige 3-12)" gekürzt
+    CHECK(!b.deps[0].destChanged && !b.deps[4].destChanged);
+    CHECK(String(b.deps[3].dest) == "St.P\xc3\xb6lten Hbf");                 // &#246; -> ö
+    CHECK(b.deps[0].delay == 72); }
 
   std::cout << "== Vorschau\n";
   {

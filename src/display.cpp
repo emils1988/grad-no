@@ -237,8 +237,11 @@ static void drawRow(TFT_eSPI& g, int y, const Departure& d, bool alt, time_t now
 
   // Ziel
   g.setTextDatum(ML_DATUM);
-  g.setTextColor(d.cancelled ? C_RED : pal.text, bg);
-  g.drawString(fit(g, translit(d.dest), destRight - COL_DEST), COL_DEST, cy);
+  // geändertes Ziel gelb hervorheben, mit "!" davor
+  String dest = translit(d.dest);
+  if (d.destChanged && !d.cancelled) dest = "! " + dest;
+  g.setTextColor(d.cancelled ? C_RED : (d.destChanged ? C_YELLOW : pal.text), bg);
+  g.drawString(fit(g, dest, destRight - COL_DEST), COL_DEST, cy);
 
   // Countdown
   g.setTextDatum(MR_DATUM);

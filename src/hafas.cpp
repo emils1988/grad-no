@@ -75,6 +75,19 @@ static String latin1ToUtf8(const String& s) {
 static String cleanText(const char* in) {
   String s(in ? in : "");
   if (!isValidUtf8(s)) s = latin1ToUtf8(s);   // Scotty liefert Latin-1
+  // HTML-Auszeichnungen entfernen (Scotty markiert z.B. ein geändertes Ziel mit <b>…</b>)
+  if (s.indexOf('<') >= 0) {
+    String t;
+    t.reserve(s.length());
+    bool tag = false;
+    for (size_t i = 0; i < s.length(); i++) {
+      char c = s[i];
+      if (c == '<') tag = true;
+      else if (c == '>' && tag) tag = false;
+      else if (!tag) t += c;
+    }
+    s = t;
+  }
   if (s.indexOf('&') >= 0) {
     String out;
     out.reserve(s.length());
@@ -255,6 +268,17 @@ static String httpsGet(const String& url, int& code) {
 }
 
 // ---------------------------------------------------------------- gemeinsame Helfer
+
+// Zusätze, die auf dem kleinen Display nur Platz kosten: "Wien Hbf (Bahnsteige 3-12)" -> "Wien Hbf"
+static String shortDest(String s) {
+  int p = s.indexOf(" (Bahnsteig");
+  if (p > 0) {
+    int q = s.indexOf(')', p);
+    s.remove(p, q < 0 ? s.length() - p : q - p + 1);
+    s.trim();
+  }
+  return s;
+}
 
 static DepKind kindFromLine(const String& pr) {
   String p = pr;
@@ -477,7 +501,10 @@ static bool scottyFetchBoard(const Station& st, Board& out) {
       if (seenN < 40) seen[seenN++] = jid;
     }
     String pr = cleanText(j["pr"] | "");
-    String dest = cleanText(j["st"] | "");
+    const char* stRaw = j["st"] | "";
+    // Scotty hebt ein geändertes Ziel fett hervor (z.B. Zug endet vorzeitig in Wien Hbf statt am Flughafen)
+    bool destChanged = strstr(stRaw, "<b>") || strstr(stRaw, "<B>");
+    String dest = shortDest(cleanText(stRaw));
     if (dest.length() == 0) dest = cleanText(j["lastStop"] | "");
     DepKind kind = kindFromLine(pr);
     if (!productMatches(kind, st.filter)) continue;
@@ -491,6 +518,7 @@ static bool scottyFetchBoard(const Station& st, Board& out) {
     strlcpy(d.dest, dest.c_str(), sizeof(d.dest));
     strlcpy(d.platform, cleanText(j["tr"] | "").c_str(), sizeof(d.platform));
     d.kind = kind;
+    d.destChanged = destChanged;
     d.trainNr = trainNumberOf(pr);
     d.delay = -1;
 

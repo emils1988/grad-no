@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.1 – 2026-11-12
+
+### Behoben
+- Geändertes Ziel wurde mit HTML-Zeichen angezeigt (z.B. „<b>Wien Hbf (Bahns..“). Scotty markiert so ein vom Fahrplan abweichendes Ziel, etwa wenn ein Zug wegen einer Störung vorzeitig endet.
+
+### Neu
+- Ein geändertes Ziel wird jetzt **gelb mit „!“** angezeigt, in der Weboberfläche mit ⚠.
+- Zusätze wie „(Bahnsteige 3-12)“ werden beim Ziel weggekürzt.
+
+**Update:** In der Weboberfläche unter *System → Firmware-Update* die Datei `firmware-1.1.1-ota.bin` hochladen. Die Einstellungen bleiben erhalten.
+
 ## 1.1.0 – 2026-11-11
 
 ### Neu

@@ -15,6 +15,7 @@ struct Departure {
   int16_t  delay;         // Minuten Verspätung, -1 = keine Echtzeitdaten
   bool     cancelled;
   uint8_t  kind;          // DepKind
+  bool     destChanged;   // Ziel weicht vom Fahrplan ab (z.B. Zug endet vorzeitig)
   time_t   when;          // tatsächliche Abfahrt (Epoch), 0 = unbekannt
   char     date[11];      // Abfahrtsdatum YYYY-MM-DD (für die Wagenreihung)
   uint32_t trainNr;       // Zugnummer für die Wagenreihung, 0 = keine (Bus, Nahverkehr ...)
