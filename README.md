@@ -39,9 +39,20 @@ anstecken, WLAN einrichten, Haltestelle im Browser suchen, fertig.
 | ESP32-2432S028R („Cheap Yellow Display“, 2,8", 320×240, resistiver Touch) | AliExpress, Amazon; Standardvariante mit **einer** Micro-USB-Buchse (siehe Fehlersuche für andere) | 12–18 € |
 | USB-Kabel mit Datenleitungen | reine Ladekabel funktionieren nicht | – |
 | USB-Netzteil 5 V / 1 A | | – |
-| Gehäuse (optional) | 3D-Druck, viele CYD-Gehäuse auf Printables/Thingiverse | – |
+| Gehäuse (optional) | eigene Halterung „Haltestellen-Mast“ zum 3D-Drucken, siehe [gehaeuse/](gehaeuse/) | – |
 
 Löten ist nicht nötig.
+
+### Gehäuse zum Drucken
+
+<a href="gehaeuse/"><img src="gehaeuse/foto.jpg" alt="Grad no! in der Halterung Haltestellen-Mast" width="260" align="right"></a>
+
+Im Ordner [`gehaeuse/`](gehaeuse/) liegt eine Halterung im Stil eines Haltestellen-Masts: Das Display hängt wie ein
+Haltestellenschild am Mast, das USB-Kabel läuft unsichtbar durch den Mast in den Sockel, die Buchse sitzt seitlich im Sockel.
+Alle Teile drucken ohne Stützmaterial, das „H“ geht auch zweifarbig. STL-Dateien, Zubehörliste und Anleitung
+stehen im [Gehäuse-README](gehaeuse/README.md), die Maße lassen sich in OpenSCAD anpassen.
+
+<br clear="right">
 
 ## Installation
 
