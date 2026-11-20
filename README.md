@@ -16,6 +16,9 @@ anstecken, WLAN einrichten, Haltestelle im Browser suchen, fertig.
   <sub>Umschalten zwischen den Haltestellen per Tippen · <a href="docs/demo.mp4">Video in voller Qualität</a></sub>
 </p>
 
+> **Ohne Hardware, in Home Assistant:** Die gleiche Abfahrtstafel gibt es auch als Integration mit Lovelace-Karte,
+> installierbar über HACS: **[Grad no! für Home Assistant](https://github.com/emils1988/grad-no-homeassistant)**.
+
 > **Hinweis:** Privates Bastelprojekt, **nicht von den ÖBB oder den Wiener Linien** und nicht mit ihnen verbunden.
 > Es nutzt öffentlich erreichbare, aber nicht offiziell dokumentierte Schnittstellen von ÖBB Scotty und ÖBB Live
 > (Wagenreihung). Die können sich jederzeit ändern. Bitte sparsam abfragen (Standard: alle 60 s, mindestens 20 s).
@@ -31,6 +34,7 @@ anstecken, WLAN einrichten, Haltestelle im Browser suchen, fertig.
 - **Weboberfläche** unter `http://grad-no.local` mit Haltestellensuche, Einstellungen und Live-Vorschau
 - **Firmware-Update im Browser** (OTA), passwortgeschützt
 - WLAN-Einrichtung über einen Hotspot, Nachtmodus (dimmen oder aus)
+- Auch als **[Home-Assistant-Integration](https://github.com/emils1988/grad-no-homeassistant)** (HACS) mit Sensoren und Abfahrtstafel-Karte, ganz ohne Display
 
 ## Was du brauchst
 
